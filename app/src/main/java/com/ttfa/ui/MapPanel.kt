@@ -15,11 +15,12 @@ import org.osmdroid.views.overlay.Polyline
 
 /** Map rendering is separate from routing. OSM tiles do not verify maneuver legality. */
 @Composable
-fun MapPanel(state: UiState, modifier: Modifier = Modifier) {
+fun MapPanel(state: UiState, modifier: Modifier = Modifier, visible: Boolean = true) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val map = remember { MapView(context).apply {
         setTileSource(TileSourceFactory.MAPNIK); setMultiTouchControls(true)
+        isFocusable = false; isFocusableInTouchMode = false
         controller.setZoom(15.0); controller.setCenter(GeoPoint(state.location.latitude, state.location.longitude))
     } }
     DisposableEffect(map, lifecycle) {
@@ -30,6 +31,10 @@ fun MapPanel(state: UiState, modifier: Modifier = Modifier) {
         onDispose { lifecycle.removeObserver(observer); map.onPause(); map.onDetach() }
     }
     AndroidView(factory = { map }, modifier = modifier, update = { view ->
+        view.visibility = if (visible) android.view.View.VISIBLE else android.view.View.INVISIBLE
+        view.importantForAccessibility = if (visible) android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            else android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        if (!visible) return@AndroidView
         view.overlays.clear()
         state.route?.let { route ->
             val line = Polyline(view).apply {

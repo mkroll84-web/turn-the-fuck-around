@@ -8,13 +8,15 @@ Native Android MVP built with Kotlin and Jetpack Compose. No API key is needed f
 
 Install the debug APK on an Android phone (Android 8 or newer). Open the app, pick a demo destination, and tap **Start Navigation · demo**. Tap **Miss a turn** to compare the normal reroute against the fictional shorter reconnect route. Settings lets you choose a personality, disable WTF Mode, and adjust its minimum time/distance savings.
 
-The offline demo map and every demo maneuver are fictional. Do not follow them on real roads. **Live driving navigation is not connected yet.** Turn off Demo drive in Settings and tap Enable phone GPS to see your real position on an OpenStreetMap map. GPS requires phone permission and enabled location services; map tiles need internet. Destination search currently searches three demo destinations only.
+The offline demo map and every demo maneuver are fictional. Do not follow them on real roads. Turn off Demo drive to type real addresses, businesses, landmarks, or cities and choose Google Places autocomplete suggestions. A restricted Google Places key and billing are required; add the key in Settings without rebuilding. [Plain-English setup for Melissa](README_FOR_MELISSA.md).
+
+Real Start Navigation opens Google Maps for driving directions. In-app live routing/WTF comparison is not connected yet. Phone GPS and the OpenStreetMap location map remain available. Location permission is optional for search; fresh permitted fixes bias results nearby. Google results and selected destinations appear separately from the OpenStreetMap map.
 
 ## Build
 
 Open this folder in Android Studio and let it finish downloading Android SDK 35 and dependencies. Select a phone or emulator and press Run. No secrets or paid account are needed.
 
-Command-line development requires Java 17/21 and an Android SDK with platform 35 and build-tools 35.0.0. Set `ANDROID_HOME` or put `sdk.dir=/your/android/sdk` in ignored `local.properties`.
+Command-line development requires a full Java 17/21 JDK and an Android SDK with platform 35 and build-tools 35.0.0. Set `ANDROID_HOME` or put `sdk.dir=/your/android/sdk` in ignored `local.properties`. `local.properties.example` documents the optional build-time key; do not commit real keys.
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug
@@ -26,8 +28,8 @@ Cloud development uses the existing checkout, not a new worktree. See `scripts/c
 
 ## Included
 
-Home, offline demo map, destination selection, route line and driver marker, animated navigation, ETA/distance/maneuver, pause/resume, arrival, off-route detection, normal reroute fallback, WTF route comparison, personalities, saved settings, and foreground phone GPS with permission-denial handling. The provider and map renderer are separate.
+Home, offline demo map, real Google Places search/selection, Google Maps directions handoff, demo route line and driver marker, animated navigation, ETA/distance/maneuver, pause/resume, arrival, off-route detection, normal reroute fallback, WTF route comparison, personalities, saved settings, and foreground phone GPS with permission-denial handling. Search, routing, and map rendering have separate provider boundaries.
 
-No spoken directions, live road search/routing, background tracking, traffic, or production navigation yet. Comedy is display text only and cannot alter directions. Unit tests exercise safety rejection, thresholds, deviation accuracy, and provider behavior.
+No in-app spoken directions, live road routing, background tracking, traffic, or production navigation yet. Comedy is display text only and cannot alter directions. Unit tests exercise safety rejection, thresholds, deviation accuracy, search state/cancellation, location bias, destination handoff, and key encryption.
 
-Validation evidence and limits: `docs/VALIDATION.md`. The debug APK was launched and tested on an Android 9 emulator; the safety suite has 11 passing tests.
+Validation evidence and limits: `docs/VALIDATION.md`. Download the installable debug APK from `builds/TURN-THE-FUCK-AROUND.apk` on GitHub using **Download raw file**.

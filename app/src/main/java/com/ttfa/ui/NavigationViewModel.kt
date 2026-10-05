@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ttfa.data.DemoNavigationProvider
+import com.ttfa.data.places.GooglePlacesKeyStore
+import com.ttfa.data.places.GooglePlacesSearchProvider
 import com.ttfa.domain.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -18,9 +20,16 @@ data class UiState(
     val thresholds: WtfThresholds = WtfThresholds(), val settings: Boolean = false, val paused: Boolean = false,
     val message: String? = null, val decision: RouteDecision? = null, val normalRoute: Route? = null,
     val busy: Boolean = false, val arrived: Boolean = false,
+    val liveSearch: DestinationSearchState = DestinationSearchState(),
+    val googleKeyConfigured: Boolean = false, val googleKeyMessage: String? = null,
+    val locationPermissionGranted: Boolean = false,
+
 )
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
     private val provider: NavigationProvider = DemoNavigationProvider()
+    private val googleKeyStore = GooglePlacesKeyStore(application)
+    private val liveSearch = DestinationSearchController(viewModelScope, GooglePlacesSearchProvider(application, googleKeyStore))
+    private var lastGpsFixMillis = 0L
     private val preferences = application.getSharedPreferences("settings", 0)
     private val detector = DeviationDetector()
     private var simulationJob: Job? = null
@@ -29,17 +38,63 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     private var points: List<Coordinate> = emptyList()
     private var position = 0
     private val _state = MutableStateFlow(UiState(
+        googleKeyConfigured = googleKeyStore.isConfigured,
         wtf = preferences.getBoolean("wtf", true),
         personality = Personality.entries.firstOrNull { it.name == preferences.getString("personality", "DRY") } ?: Personality.DRY,
         thresholds = WtfThresholds(preferences.getFloat("meters", 400f).toDouble(), preferences.getInt("seconds", 60)),
     ))
     val state = _state.asStateFlow()
-    init { search("") }
-    fun search(query: String) {
-        _state.update { it.copy(query = query) }; searchJob?.cancel()
-        searchJob = viewModelScope.launch { delay(150); val result = provider.search(query); _state.update { it.copy(destinations = result) } }
+    init {
+        viewModelScope.launch {
+            liveSearch.state.collect { live ->
+                _state.update { it.copy(liveSearch = live, selected = if (it.simulation) it.selected else live.selected) }
+            }
+        }
+        search("")
     }
-    fun select(destination: Destination) { _state.update { it.copy(selected = destination, message = null) } }
+    fun search(query: String) {
+        if (!_state.value.simulation) {
+            val s = _state.value
+            val bias = searchLocationBias(s.gps, s.locationPermissionGranted, lastGpsFixMillis, android.os.SystemClock.elapsedRealtime())
+            liveSearch.search(query, bias)
+            // Forward edits immediately; the UI and provider must agree on the
+            // latest query without waiting for the second StateFlow collector.
+            _state.update { it.copy(liveSearch = liveSearch.state.value, selected = null) }
+            return
+        }
+        _state.update { it.copy(query = query, selected = null) }; searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(150)
+            val result = provider.search(query)
+            if (_state.value.simulation && _state.value.query == query) _state.update { it.copy(destinations = result) }
+        }
+    }
+    fun select(destination: Destination) {
+        if (_state.value.simulation && destination in _state.value.destinations && destination.source == DestinationSource.DEMO)
+            _state.update { it.copy(selected = destination, message = null) }
+    }
+    fun selectPlace(suggestion: PlaceSuggestion) { if (!_state.value.simulation) liveSearch.select(suggestion) }
+    fun clearLiveSearch() { liveSearch.clear() }
+    fun saveGoogleKey(value: String): Boolean {
+        val key = value.trim()
+        if (!usablePlacesKey(key)) {
+            _state.update { it.copy(googleKeyMessage = "Paste the real Google key, not the example placeholder.") }; return false
+        }
+        return try {
+            liveSearch.clear()
+            googleKeyStore.save(key)
+            _state.update { it.copy(googleKeyConfigured = true, googleKeyMessage = "Google key saved securely. Turn off Demo drive and search for a destination.") }
+            true
+        } catch (_: Exception) {
+            _state.update { it.copy(googleKeyMessage = "Couldn’t save the key on this phone. Please try again.") }; false
+        }
+    }
+    fun removeGoogleKey() {
+        liveSearch.clear(); googleKeyStore.clear()
+        val configured = googleKeyStore.isConfigured
+        _state.update { it.copy(googleKeyConfigured = configured,
+            googleKeyMessage = if (configured) "App-saved key removed; a build key is still configured." else "Google key removed. Demo drive still works offline.") }
+    }
     fun settings(show: Boolean) { _state.update { it.copy(settings = show) } }
     fun wtf(enabled: Boolean) { preferences.edit().putBoolean("wtf", enabled).apply(); _state.update { it.copy(wtf = enabled) } }
     fun personality(value: Personality) { preferences.edit().putString("personality", value.name).apply(); _state.update { it.copy(personality = value) } }
@@ -48,13 +103,23 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         _state.update { it.copy(thresholds = WtfThresholds(meters, seconds)) }
     }
     fun simulation(enabled: Boolean) {
-        stop()
-        _state.update { it.copy(simulation = enabled, location = if (enabled) Coordinate(37.7749, -122.4194) else it.gps ?: it.location, message = null, selected = null) }
+        stop(); searchJob?.cancel()
+        _state.update { it.copy(simulation = enabled, location = if (enabled) Coordinate(37.7749, -122.4194) else it.gps ?: it.location,
+            query = "", destinations = emptyList(), message = null, selected = null, liveSearch = DestinationSearchState()) }
+        liveSearch.clear()
+        if (enabled) search("")
+    }
+    fun locationPermission(granted: Boolean) {
+        _state.update { it.copy(locationPermissionGranted = granted, gps = if (granted) it.gps else null) }
     }
     fun gps(point: Coordinate, accuracy: Float) {
-        _state.update { it.copy(gps = point, gpsStatus = "Phone GPS · accuracy ${accuracy.toInt()} m", location = if (it.simulation) it.location else point) }
+        if (!point.latitude.isFinite() || point.latitude !in -90.0..90.0 || !point.longitude.isFinite() || point.longitude !in -180.0..180.0) return
+        lastGpsFixMillis = android.os.SystemClock.elapsedRealtime()
+        _state.update { it.copy(gps = point, locationPermissionGranted = true,
+            gpsStatus = "Phone GPS · accuracy ${accuracy.toInt()} m", location = if (it.simulation) it.location else point) }
     }
     fun gpsStatus(message: String) { _state.update { it.copy(gpsStatus = message) } }
+    fun navigationLaunchFailed() { _state.update { it.copy(message = "Couldn’t open Google Maps. Install Google Maps or a web browser, then try again.") } }
     fun start() {
         val s = _state.value; val destination = s.selected ?: return
         if (!s.simulation && provider.simulationOnly) { _state.update { it.copy(message = "Live routing isn’t connected. Turn on Demo drive to try navigation.") }; return }

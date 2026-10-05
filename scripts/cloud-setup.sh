@@ -6,6 +6,7 @@ export ANDROID_HOME=/workspace/toolchains/android
 export ANDROID_USER_HOME=/workspace/toolchains/android-user
 export GRADLE_USER_HOME=/workspace/.gradle
 mkdir -p /workspace/toolchains "$ANDROID_USER_HOME" "$GRADLE_USER_HOME"
+source scripts/cloud-java.sh
 if [[ ! -x /workspace/toolchains/gradle-8.9/bin/gradle ]]; then
     curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /workspace/toolchains/gradle.zip
     curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256 -o /workspace/toolchains/gradle.sha256

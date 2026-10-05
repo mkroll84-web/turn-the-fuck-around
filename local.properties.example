@@ -1,0 +1,5 @@
+# Optional BUILD-TIME configuration. Copy to local.properties (which is ignored by Git).
+# Keep your existing sdk.dir line; change only the GOOGLE_PLACES_API_KEY value.
+# Never put a real key in this example, source files, GitHub, or chat.
+GOOGLE_PLACES_API_KEY=PASTE_YOUR_GOOGLE_MAPS_PLATFORM_API_KEY_HERE
+# The installed app also accepts the restricted key in Settings > Google Places, without a rebuild.

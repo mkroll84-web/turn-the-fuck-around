@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/cloud-java.sh
 export ANDROID_HOME="${ANDROID_HOME:-/workspace/toolchains/android}"
 export ANDROID_USER_HOME="${ANDROID_USER_HOME:-/workspace/toolchains/android-user}"
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/workspace/.gradle}"

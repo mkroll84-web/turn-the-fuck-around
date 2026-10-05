@@ -3,7 +3,17 @@ package com.ttfa.domain
 import kotlin.math.*
 
 data class Coordinate(val latitude: Double, val longitude: Double)
-data class Destination(val id: String, val name: String, val location: Coordinate)
+enum class DestinationSource { DEMO, GOOGLE_PLACES }
+data class Destination(
+    val id: String,
+    val name: String,
+    val location: Coordinate,
+    val formattedAddress: String = name,
+    val source: DestinationSource = DestinationSource.DEMO,
+    val attributions: List<String> = emptyList(),
+) {
+    val placeId: String? get() = id.takeIf { source == DestinationSource.GOOGLE_PLACES }
+}
 enum class RouteTrust { UNVERIFIED, SIMULATION_ONLY, PROVIDER_VERIFIED }
 data class Maneuver(val at: Coordinate, val instruction: String)
 data class Route(

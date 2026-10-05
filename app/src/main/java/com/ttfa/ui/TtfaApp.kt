@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ttfa.domain.Personality
+import com.ttfa.domain.Destination
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,10 +27,10 @@ private fun miles(meters: Double) = String.format(Locale.US, "%.1f mi", meters /
 private fun minutes(seconds: Int) = "${ceil(seconds / 60.0).toInt()} min"
 
 @Composable
-fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit) {
+fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit, startLiveNavigation: (Destination) -> Unit) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Teal, secondary = Orange, background = Color(0xFFF6F3ED), surface = Color(0xFFF6F3ED))) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
                 Row(Modifier.fillMaxWidth().background(Ink).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("TURN THE FUCK AROUND", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
@@ -39,16 +40,27 @@ fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit) 
                 }
                 if (state.settings) Settings(state, model, requestGps) else {
                     Row(Modifier.fillMaxWidth().background(if (state.simulation) Color(0xFFFFE7B7) else Color(0xFFDEEAE7)).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(if (state.simulation) "DEMO DRIVE · fictional directions · never drive this route" else "GPS MAP · live routing not connected", style = MaterialTheme.typography.labelMedium)
+                        Text(if (state.simulation) "DEMO DRIVE · fictional directions · never drive this route" else "GPS MAP · Google destination search", style = MaterialTheme.typography.labelMedium)
                     }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        if (state.simulation) DemoMap(state, Modifier.fillMaxSize()) else MapPanel(state, Modifier.fillMaxSize())
+                        if (state.simulation) DemoMap(state, Modifier.fillMaxSize()) else {
+                            val showGpsMap = state.liveSearch.query.isBlank() && state.liveSearch.selected == null
+                            // Retain the native map while hiding it. Detaching an AndroidView
+                            // during the first keystrokes can disrupt the keyboard's focus.
+                            MapPanel(state.copy(selected = null), Modifier.fillMaxSize(), visible = showGpsMap)
+                            if (!showGpsMap) Surface(Modifier.fillMaxSize(), color = Color(0xFFDEEFE7)) {
+                                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.Center) {
+                                    Text("Find your destination", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                    Text("Choose a Google suggestion below. Your destination will open in Google Maps for real directions.")
+                                }
+                            }
+                        }
                         Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = MaterialTheme.shapes.medium, shadowElevation = 3.dp) {
                             Text(if (state.simulation) "San Francisco demo" else state.gpsStatus, Modifier.padding(10.dp), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     Column(Modifier.fillMaxWidth().heightIn(max = 410.dp).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (state.navigating || state.arrived) NavigationCard(state, model) else HomeCard(state, model, requestGps)
+                        if (state.navigating || state.arrived) NavigationCard(state, model) else HomeCard(state, model, requestGps, startLiveNavigation)
                     }
                 }
             }
@@ -57,7 +69,7 @@ fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit) 
 }
 
 @Composable
-private fun HomeCard(state: UiState, model: NavigationViewModel, requestGps: () -> Unit) {
+private fun HomeCard(state: UiState, model: NavigationViewModel, requestGps: () -> Unit, startLiveNavigation: (Destination) -> Unit) {
     if (state.simulation) {
         OutlinedTextField(state.query, model::search, label = { Text("Where to? Search demo places") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (state.destinations.isEmpty()) Text("No demo places found. Try coffee, park, or diner.")
@@ -71,15 +83,16 @@ private fun HomeCard(state: UiState, model: NavigationViewModel, requestGps: () 
         }
         Button(model::start, enabled = state.selected != null && !state.busy, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Finding route…" else "Start Navigation · demo") }
     } else {
-        Text("Your location", style = MaterialTheme.typography.titleLarge)
+        LiveDestinationSearch(state, model, startLiveNavigation)
+        Text("Your location", style = MaterialTheme.typography.titleMedium)
         Text(state.gpsStatus)
         state.gps?.let { Text(String.format(Locale.US, "%.5f, %.5f", it.latitude, it.longitude)) }
-        Text("Real driving directions require a connected routing provider. You can explore your GPS position now or try the demo.")
+        Text("Real driving directions open in Google Maps. Phone GPS is optional for searching.")
         Button(requestGps, modifier = Modifier.fillMaxWidth()) { Text("Enable phone GPS") }
         OutlinedButton({ model.simulation(true) }, modifier = Modifier.fillMaxWidth()) { Text("Try demo navigation") }
     }
     state.message?.let { Text(it, color = Teal) }
-    Text(if (state.simulation) "Fictional offline map · demo destinations only" else "© OpenStreetMap contributors · map tiles need internet", style = MaterialTheme.typography.labelSmall)
+    if (state.simulation || state.liveSearch.query.isBlank() && state.liveSearch.selected == null) Text(if (state.simulation) "Fictional offline map · demo destinations only" else "© OpenStreetMap contributors · GPS map only", style = MaterialTheme.typography.labelSmall)
 }
 
 @Composable
@@ -116,7 +129,7 @@ private fun Settings(state: UiState, model: NavigationViewModel, requestGps: () 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your co-pilot", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically) { Text("Demo drive", Modifier.weight(1f)); Switch(state.simulation, model::simulation, modifier = Modifier.semantics { contentDescription = "Demo drive" }) }
-        Text("Demo routes are fictional. GPS map mode shows your phone’s location and does not provide driving directions.")
+        Text("Demo routes are fictional and offline. Turn Demo drive off for Google destination search and directions in Google Maps.")
         Row(verticalAlignment = Alignment.CenterVertically) { Text("WTF MODE", Modifier.weight(1f), fontWeight = FontWeight.Bold); Switch(state.wtf, model::wtf, modifier = Modifier.semantics { contentDescription = "WTF MODE" }) }
         Text("Only provider-verified legal alternatives may be used in live navigation. Comedy never changes a maneuver.")
         Text("Personality", style = MaterialTheme.typography.titleMedium)
@@ -132,10 +145,11 @@ private fun Settings(state: UiState, model: NavigationViewModel, requestGps: () 
         Slider(state.thresholds.minimumSecondsSaved.toFloat(), { model.thresholds(state.thresholds.minimumMetersSaved, it.toInt()) }, valueRange = 30f..300f, steps = 8)
         Text("Both savings thresholds must be met. Otherwise use the normal reroute.")
         HorizontalDivider()
+        GooglePlacesSettings(state, model)
         Text(state.gpsStatus)
         Button(requestGps) { Text("Enable phone GPS") }
         Text("Safety first", style = MaterialTheme.typography.titleMedium)
-        Text("Set your destination while parked. This MVP has no voice guidance, background navigation, traffic, or live road routing. Do not use it for real driving yet.")
+        Text("Set your destination while parked. Real directions open in Google Maps. In-app demo routes are fictional; never follow them on real roads. This MVP has no in-app live road routing, voice guidance, traffic, or background navigation.")
         Text("Map data © OpenStreetMap contributors", style = MaterialTheme.typography.labelSmall)
     }
 }
