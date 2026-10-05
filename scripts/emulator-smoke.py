@@ -11,7 +11,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('--adb', default='adb')
 parser.add_argument('--serial', default='emulator-5554')
-parser.add_argument('--phase', choices=['all', 'demo', 'search', 'input'], default='all')
+parser.add_argument('--phase', choices=['all', 'demo', 'search', 'input', 'purchases'], default='all')
 args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('This test clears demo state and is restricted to emulators.')
@@ -33,6 +33,7 @@ def nodes():
             return []
         raise
     if b'dumped to:' not in result.lower():
+        print('UI dump unavailable; retrying:', result.decode(errors='replace').strip(), flush=True)
         return []  # A transient null root must never reuse a stale hierarchy.
     return list(ET.fromstring(adb('exec-out', 'cat', '/sdcard/ttfa-smoke.xml')).iter('node'))
 
@@ -59,7 +60,7 @@ def control(name, timeout=90):
     raise AssertionError('Missing named accessible control: ' + name)
 
 def tap(node):
-    x1, y1, x2, y2 = map(int, re.findall(r'\d+', node.get('bounds')))
+    x1, y1, x2, y2 = map(int, re.findall(r'-?\d+', node.get('bounds')))
     adb('shell', 'input', 'tap', str((x1 + x2) // 2), str((y1 + y2) // 2))
 
 def click(text):
@@ -68,21 +69,42 @@ def click(text):
 
 screen = list(map(int, re.findall(r'\d+', adb('shell', 'wm', 'size').decode())[-2:]))
 
-def scroll_find(predicate, label):
-    for _ in range(9):
+def scroll_find(predicate, label, after_section=None):
+    deadline = time.monotonic() + 300
+    swipes = 0
+    while time.monotonic() < deadline and swipes < 12:
         current = nodes()
-        found = next((n for n in current if predicate(n) and n.get('bounds') != '[0,0][0,0]'), None)
+        def visible(n):
+            values = list(map(int, re.findall(r'-?\d+', n.get('bounds', ''))))
+            if len(values) != 4: return False
+            x1, y1, x2, y2 = values
+            return x2 > x1 and y2 > y1 and 0 <= (x1+x2)//2 < screen[0] and 285 <= (y1+y2)//2 < screen[1]-140
+        candidates = current
+        if after_section is not None:
+            section_index = next((i for i,n in enumerate(current) if n.get('text') == after_section), None)
+            candidates = current[section_index+1:] if section_index is not None else []
+        found = next((n for n in candidates if predicate(n) and visible(n)), None)
         if found is not None:
             return found
-        if current:
-            adb('shell', 'input', 'swipe', str(screen[0] // 2), str(int(screen[1] * .84)),
-                str(screen[0] // 2), str(int(screen[1] * .51)), '450')
+        if not current:
+            time.sleep(1)
+            continue
+        # Only move after reading a fresh tree, so bridge failures cannot
+        # scroll past an unchecked control. Search back upward if necessary.
+        swipes += 1
+        start_y, end_y = (.84, .37) if swipes <= 6 else (.37, .84)
+        adb('shell', 'input', 'swipe', str(int(screen[0] * .97)), str(int(screen[1] * start_y)),
+            str(int(screen[0] * .97)), str(int(screen[1] * end_y)), '800')
         time.sleep(1)
     raise AssertionError('Missing scrollable UI control: ' + label)
 
 def scroll_text(text):
     print('Checking scrollable text:', text, flush=True)
     return scroll_find(lambda n: text in n.get('text', ''), text)
+
+def scroll_section_text(section, text):
+    print('Checking section:', section, '/', text, flush=True)
+    return scroll_find(lambda n: n.get('text') == text, section + '/' + text, after_section=section)
 
 def editable():
     print('Checking editable input field', flush=True)
@@ -124,7 +146,7 @@ def demo_checks():
     click('Settings')
     wait_for('Your co-pilot')
     tap(control('WTF MODE'))
-    tap(control('Full roast'))
+    tap(control('Unhinged'))
     click('Done')
     click('Start Navigation')
     click('Pause')
@@ -138,7 +160,7 @@ def demo_checks():
     click('Settings')
     wait_for('Your co-pilot')
     assert control('WTF MODE').get('checked') == 'false', 'WTF preference must persist'
-    assert control('Full roast').get('checked') == 'true', 'Personality preference must persist'
+    assert control('Unhinged').get('checked') == 'true', 'Personality preference must persist'
     click('Done')
     print('PASS: demo navigation, WTF win/fallback, personality and saved settings', flush=True)
 
@@ -217,6 +239,47 @@ def finish_input_checks():
     wait_for('Common Sense Coffee')
     print('PASS: complete real address typing, unresolved-navigation guard, GPS denial and demo separation', flush=True)
 
+def purchase_checks():
+    click('Settings')
+    wait_for('Your co-pilot')
+    tap(scroll_find(lambda n: n.get('checkable') == 'true' and any(c.get('content-desc') == 'Voo Mode' for c in n.iter()), 'Voo Mode'))
+    wait_for('UNLOCK VOO MODE')
+    wait_for('One-time purchase:')
+    scroll_text('No subscription')
+    checkout = scroll_find(lambda n: n.get('enabled') == 'false' and any(child.get('text') == 'UNLOCK VOO MODE' for child in n.iter()), 'disabled Voo checkout')
+    assert checkout.get('enabled') == 'false', 'Unconfigured sideload checkout must be disabled'
+    screenshot('voo-locked-paywall.png')
+    scroll_text('NOT TODAY, DUMBASS')
+    click('Close')
+    wait_for('Your co-pilot')
+    scroll_text('Development Voo override')
+    switch = control('Development Voo override')
+    assert switch.get('checked') == 'false'
+    tap(switch)
+    scroll_text('development override (not a purchase)')
+    adb('shell', 'am', 'force-stop', 'com.ttfa')
+    adb('shell', 'am', 'start', '-n', 'com.ttfa/.MainActivity')
+    click('Settings')
+    tap(scroll_find(lambda n: n.get('checkable') == 'true' and any(c.get('content-desc') == 'Voo Mode' for c in n.iter()), 'Voo Mode'))
+    wait_for('Done')
+    assert control('Voo Mode').get('checked') == 'true', 'Development entitlement should select Voo without paywall'
+    tap(scroll_text('Absolutely Foul'))
+    tap(scroll_section_text('Appearance', 'Dark'))
+    screenshot('settings-dark-voo.png')
+    click('Done')
+    click('Common Sense Coffee')
+    click('Start Navigation')
+    click('Pause')
+    wait_for('Resume')
+    miss_turn('WTF MODE WINS')
+    wait_for('You absolute fucking disaster')
+    screenshot('voo-foul-demo-dark.png')
+    click('End navigation')
+    click('Settings')
+    tap(scroll_section_text('Appearance', 'Light'))
+    screenshot('settings-light.png')
+    print('PASS: locked paywall, disabled unconfigured checkout, development unlock persistence, Voo Foul demo and both themes', flush=True)
+
 adb('shell', 'input', 'keyevent', '224')
 adb('shell', 'wm', 'dismiss-keyguard')
 print('Launching fresh demo state', flush=True)
@@ -230,5 +293,7 @@ if args.phase in ('all', 'search'):
     search_checks()
 if args.phase == 'input':
     input_checks()
+if args.phase == 'purchases':
+    purchase_checks()
 print('PASS:', args.phase, 'screen checks')
 print('Screenshots:', output)

@@ -81,7 +81,7 @@ fun LiveDestinationSearch(state: UiState, model: NavigationViewModel, startNavig
         Image(painterResource(com.google.android.libraries.places.R.drawable.googlemaps_logo_withdarkoutline),
             contentDescription = "Google Maps", modifier = Modifier.height(22.dp).padding(vertical = 2.dp))
     }
-    Button({ keyboard?.hide(); focus.clearFocus(); live.selected?.let(startNavigation) }, enabled = live.selected != null && !live.loading, modifier = Modifier.fillMaxWidth()) {
+    BrandButton({ keyboard?.hide(); focus.clearFocus(); live.selected?.let(startNavigation) }, enabled = live.selected != null && !live.loading, modifier = Modifier.fillMaxWidth()) {
         Text("Start Navigation")
     }
     Text("Start Navigation opens Google Maps for real driving directions. In-app WTF rerouting is still a demo.", style = MaterialTheme.typography.bodySmall)

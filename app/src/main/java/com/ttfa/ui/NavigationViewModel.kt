@@ -7,6 +7,8 @@ import com.ttfa.data.DemoNavigationProvider
 import com.ttfa.data.places.GooglePlacesKeyStore
 import com.ttfa.data.places.GooglePlacesSearchProvider
 import com.ttfa.domain.*
+import com.ttfa.data.billing.VooBillingRepository
+import com.ttfa.data.billing.VooBillingState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.math.ceil
@@ -23,9 +25,12 @@ data class UiState(
     val liveSearch: DestinationSearchState = DestinationSearchState(),
     val googleKeyConfigured: Boolean = false, val googleKeyMessage: String? = null,
     val locationPermissionGranted: Boolean = false,
+    val billing: VooBillingState = VooBillingState(), val purchaseScreen: Boolean = false,
+    val intensity: RoastIntensity = RoastIntensity.LIGHT, val theme: ThemeMode = ThemeMode.SYSTEM,
 
 )
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
+    val billing = VooBillingRepository(application)
     private val provider: NavigationProvider = DemoNavigationProvider()
     private val googleKeyStore = GooglePlacesKeyStore(application)
     private val liveSearch = DestinationSearchController(viewModelScope, GooglePlacesSearchProvider(application, googleKeyStore))
@@ -39,12 +44,17 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     private var position = 0
     private val _state = MutableStateFlow(UiState(
         googleKeyConfigured = googleKeyStore.isConfigured,
+        theme = ThemeMode.entries.firstOrNull { it.name == preferences.getString("theme", "SYSTEM") } ?: ThemeMode.SYSTEM,
+        intensity = RoastIntensity.entries.firstOrNull { it.name == preferences.getString("intensity", "LIGHT") } ?: RoastIntensity.LIGHT,
         wtf = preferences.getBoolean("wtf", true),
         personality = Personality.entries.firstOrNull { it.name == preferences.getString("personality", "DRY") } ?: Personality.DRY,
         thresholds = WtfThresholds(preferences.getFloat("meters", 400f).toDouble(), preferences.getInt("seconds", 60)),
     ))
     val state = _state.asStateFlow()
     init {
+        viewModelScope.launch { billing.state.collect { entitlement ->
+            _state.update { it.copy(billing = entitlement, personality = if (it.purchaseScreen && entitlement.unlocked) Personality.VOO else allowedPersonality(it.personality, entitlement.unlocked), intensity = if (!entitlement.unlocked && it.intensity == RoastIntensity.FOUL) RoastIntensity.SPICY else it.intensity, purchaseScreen = if (entitlement.unlocked) false else it.purchaseScreen) }
+        } }
         viewModelScope.launch {
             liveSearch.state.collect { live ->
                 _state.update { it.copy(liveSearch = live, selected = if (it.simulation) it.selected else live.selected) }
@@ -97,7 +107,16 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     }
     fun settings(show: Boolean) { _state.update { it.copy(settings = show) } }
     fun wtf(enabled: Boolean) { preferences.edit().putBoolean("wtf", enabled).apply(); _state.update { it.copy(wtf = enabled) } }
-    fun personality(value: Personality) { preferences.edit().putString("personality", value.name).apply(); _state.update { it.copy(personality = value) } }
+    fun personality(value: Personality) {
+        if (value == Personality.VOO && !_state.value.billing.unlocked) { purchaseScreen(true); return }
+        preferences.edit().putString("personality", value.name).apply(); _state.update { it.copy(personality = value) } }
+    fun purchaseScreen(show: Boolean) { _state.update { it.copy(purchaseScreen = show) } }
+    fun intensity(value: RoastIntensity) {
+        if (value == RoastIntensity.FOUL && !_state.value.billing.unlocked) { purchaseScreen(true); return }
+        preferences.edit().putString("intensity", value.name).apply(); _state.update { it.copy(intensity = value) }
+    }
+    fun theme(value: ThemeMode) { preferences.edit().putString("theme", value.name).apply(); _state.update { it.copy(theme = value) } }
+    override fun onCleared() { billing.close(); super.onCleared() }
     fun thresholds(meters: Double, seconds: Int) {
         preferences.edit().putFloat("meters", meters.toFloat()).putInt("seconds", seconds).apply()
         _state.update { it.copy(thresholds = WtfThresholds(meters, seconds)) }
@@ -181,7 +200,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                 require(options.normal.providerId == provider.id && options.normal.destinationId == s.selected.id) { "Reroute did not match the request." }
                 val choice = WtfPolicy.choose(options, s.wtf, true, s.thresholds)
                 activate(choice.route)
-                _state.update { it.copy(decision = choice, normalRoute = options.normal, message = missedTurnMessage(s.personality)) }
+                _state.update { it.copy(decision = choice, normalRoute = options.normal, message = coPilotMessage(s.personality, s.intensity, _state.value.billing.unlocked)) }
             } catch (e: CancellationException) { throw e } catch (e: Exception) { _state.update { it.copy(message = "Reroute unavailable. Stop the demo and try again.") } }
             finally { _state.update { it.copy(busy = false) } }
         }

@@ -33,3 +33,9 @@ Home, offline demo map, real Google Places search/selection, Google Maps directi
 No in-app spoken directions, live road routing, background tracking, traffic, or production navigation yet. Comedy is display text only and cannot alter directions. Unit tests exercise safety rejection, thresholds, deviation accuracy, search state/cancellation, location bias, destination handoff, and key encryption.
 
 Validation evidence and limits: `docs/VALIDATION.md`. Download the installable debug APK from `builds/TURN-THE-FUCK-AROUND.apk` on GitHub using **Download raw file**.
+
+## Paid app and Voo (0.3)
+
+The final Google Play app is planned as US $3 paid upfront; Voo is a separate US $2 permanent one-time product, `voo_mode_unlock`. There is no base-app in-app checkout or subscription. The app uses Billing Library 9.1.0, signed purchase verification, acknowledgement and ownership restoration. Configure the public Play license key and active Buy option before real checkout. The debug-only Settings override tests Voo without creating a purchase; release builds cannot enable it. See [Melissa's setup guide](README_FOR_MELISSA.md#paid-app--voo-mode-version-03) for pricing, license testers and restoration, and [architecture](docs/ARCHITECTURE.md) for the production backend work still required. Voo currently adds demo text, not a custom navigation voice.
+
+Aqua/pink branding includes system, light and dark themes, branded map/routes, and Voo purchase screens. `scripts/cloud-build.sh testReleaseUnitTest` also runs a release-variant test proving development access cannot be enabled.

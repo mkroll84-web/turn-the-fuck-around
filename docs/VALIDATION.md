@@ -1,3 +1,27 @@
+# Voo purchases and branding validation — version 0.3.0
+
+- October 5, 2026: `scripts/cloud-build.sh assembleDebug assembleRelease testDebugUnitTest testReleaseUnitTest lintDebug lintRelease` completed successfully against Billing Library 9.1.0 (current Google Maven metadata).
+- Debug: 31 tests; release: 32 tests. Zero failures, errors or skips. Includes prior navigation/search/encryption tests, valid/tampered/wrong-key RSA purchase signatures, invalid verification configuration, locked Voo behavior, all unlocked Voo roast levels, and a release-only test that cannot enable development access.
+- Debug lint: 0 errors / 21 warnings. Release lint: 0 errors / 20 warnings. Warnings cover dependency/target age, backup guidance and optional Kotlin convenience APIs; no checks were disabled.
+- Both build variants compiled. Release bytecode inspection confirms `DevelopmentUnlock.enabled()` always returns false, `set(true)` does nothing and no preferences are read. The debug implementation is excluded from release compilation.
+- The deliverable is the signed **debug** APK at `builds/TURN-THE-FUCK-AROUND.apk`, `com.ttfa`, version 0.3.0 / code 3, Android 8+ (min SDK 26). It retains the same signing certificate as installed MVP versions. SHA-256: `bbe0b2ffd23cb888c2fe1543f74c49d81fd2bc45394eda0193b6d4d997488555`.
+- No real Google Places key or Play license key is configured in the distributed APK. Demo works without them. Real checkout is disabled without a valid public verification key and eligible Play Buy offer.
+
+## Version 0.3 device checks
+
+Android 9/API 28 checks completed in stages using the signed debug APK:
+
+- Locked Voo opened the branded paywall with the one-time price, base-app/add-on disclosure, no-subscription statement and sample text. Unconfigured checkout was disabled. Close returned to Settings.
+- The explicitly named development switch was off, unlocked Voo when toggled, reported development access rather than a purchase, and survived a force-stop/restart. The unlocked Voo radio option could then be selected without a paywall.
+- Absolutely Foul selection persisted. Demo destination selection, navigation/ETA, pause, missed-turn injection, WTF MODE WINS and the gated Voo Foul message completed.
+- Dark preference persisted and its rendered home/map were visually checked. Explicit Light selection under Appearance persisted and a light settings capture was produced.
+
+The complete UI runner did not finish in one uninterrupted invocation. API 28's software-emulated UiTestAutomationBridge repeatedly returned null roots. Checks were resumed in stages after correcting harness locators for offscreen headings, unnamed switch ancestors and duplicate Light labels (roast intensity versus appearance). The current harness waits for fresh trees, names the development switch, scopes appearance selectors, and handles signed bounds/visible viewports. No failed assertion was relabeled as passed; the final individual checks above were repeated directly. Payment/account tests below remain unrun.
+
+Real Google Play payments, cancellation, delayed payment, acknowledgement/refund outcomes, and account-linked reinstall/change-phone restoration have **not** been exercised against a Play Console internal track: this task has no activated product/license-test account. Client API integration compiles against the real SDK; production never substitutes simulated purchases. Local signature verification is implemented, but server-side Play Developer API verification/RTDN remains a public-release prerequisite. Custom Voo voice and in-app real road navigation remain future milestones.
+
+## Historical destination-search validation (0.2.0)
+
 # Destination search validation — version 0.2.0
 
 ## Build and automated checks

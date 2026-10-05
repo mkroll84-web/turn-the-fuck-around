@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
                 startLiveNavigation = ::launchLiveNavigation)
         }
     }
-    override fun onStart() { super.onStart(); startGps() }
+    override fun onStart() { super.onStart(); startGps(); model.billing.refresh() }
     override fun onStop() { manager.removeUpdates(listener); super.onStop() }
     private fun launchLiveNavigation(destination: Destination) {
         val uri = Uri.parse(googleMapsDirectionsUrl(destination))

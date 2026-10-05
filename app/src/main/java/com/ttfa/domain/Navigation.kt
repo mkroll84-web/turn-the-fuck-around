@@ -90,8 +90,9 @@ class DeviationDetector(private val thresholdMeters: Double = 45.0, private val 
     }
     fun reset() { samples = 0 }
 }
-enum class Personality(val label: String) { CALM("Calm"), DRY("Dry wit"), ROAST("Full roast") }
+enum class Personality(val label: String) { CALM("Normal"), DRY("Sassy"), ROAST("Unhinged"), VOO("Voo Mode") }
 fun missedTurnMessage(personality: Personality) = when (personality) {
+    Personality.VOO -> "Deep breath, darling. That turn had one job, and apparently so did you. Recalculating safely."
     Personality.CALM -> "Missed turn. Finding another route."
     Personality.DRY -> "A scenic detour. Bold choice."
     Personality.ROAST -> "You missed the fucking turn. Let’s sort it out safely."

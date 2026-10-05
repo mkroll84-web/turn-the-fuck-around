@@ -1,6 +1,8 @@
 package com.ttfa.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,33 +16,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ttfa.domain.Personality
+import com.ttfa.domain.RoastIntensity
+import com.ttfa.domain.ThemeMode
 import com.ttfa.domain.Destination
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
 
-private val Ink = Color(0xFF101C20)
-private val Teal = Color(0xFF006B63)
-private val Orange = Color(0xFFFF6A45)
 private fun miles(meters: Double) = String.format(Locale.US, "%.1f mi", meters / 1609.344)
 private fun minutes(seconds: Int) = "${ceil(seconds / 60.0).toInt()} min"
 
 @Composable
 fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit, startLiveNavigation: (Destination) -> Unit) {
-    MaterialTheme(colorScheme = lightColorScheme(primary = Teal, secondary = Orange, background = Color(0xFFF6F3ED), surface = Color(0xFFF6F3ED))) {
+    BackHandler(enabled = state.purchaseScreen || state.settings) { if (state.purchaseScreen) model.purchaseScreen(false) else model.settings(false) }
+    BrandTheme(state.theme) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
-                Row(Modifier.fillMaxWidth().background(Ink).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().background(BrandInk).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("TURN THE FUCK AROUND", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-                        Text("Navigation with common fucking sense.", color = Color(0xFFAFCCC5), style = MaterialTheme.typography.bodySmall)
+                        Text("Navigation with common fucking sense.", color = BrandAqua, style = MaterialTheme.typography.bodySmall)
                     }
-                    TextButton(onClick = { model.settings(!state.settings) }) { Text(if (state.settings) "Done" else "Settings", color = Color.White) }
+                    TextButton(onClick = { if (state.purchaseScreen) model.purchaseScreen(false) else model.settings(!state.settings) }) { Text(if (state.purchaseScreen) "Close" else if (state.settings) "Done" else "Settings", color = Color.White) }
                 }
-                if (state.settings) Settings(state, model, requestGps) else {
-                    Row(Modifier.fillMaxWidth().background(if (state.simulation) Color(0xFFFFE7B7) else Color(0xFFDEEAE7)).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(if (state.simulation) "DEMO DRIVE · fictional directions · never drive this route" else "GPS MAP · Google destination search", style = MaterialTheme.typography.labelMedium)
+                if (state.purchaseScreen) VooPurchaseScreen(state, model) else if (state.settings) Settings(state, model, requestGps) else {
+                    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(if (state.simulation) "DEMO DRIVE · fictional directions · never drive this route" else "GPS MAP · Google destination search", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         if (state.simulation) DemoMap(state, Modifier.fillMaxSize()) else {
@@ -48,7 +50,7 @@ fun TtfaApp(state: UiState, model: NavigationViewModel, requestGps: () -> Unit, 
                             // Retain the native map while hiding it. Detaching an AndroidView
                             // during the first keystrokes can disrupt the keyboard's focus.
                             MapPanel(state.copy(selected = null), Modifier.fillMaxSize(), visible = showGpsMap)
-                            if (!showGpsMap) Surface(Modifier.fillMaxSize(), color = Color(0xFFDEEFE7)) {
+                            if (!showGpsMap) Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
                                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.Center) {
                                     Text("Find your destination", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                                     Text("Choose a Google suggestion below. Your destination will open in Google Maps for real directions.")
@@ -79,19 +81,19 @@ private fun HomeCard(state: UiState, model: NavigationViewModel, requestGps: () 
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("WTF MODE", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Switch(state.wtf, model::wtf, modifier = Modifier.semantics { contentDescription = "WTF MODE" })
+            Text("WTF MODE", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); BrandSwitch(state.wtf, model::wtf, modifier = Modifier.semantics { contentDescription = "WTF MODE" })
         }
-        Button(model::start, enabled = state.selected != null && !state.busy, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Finding route…" else "Start Navigation · demo") }
+        BrandButton(model::start, enabled = state.selected != null && !state.busy, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Finding route…" else "Start Navigation · demo") }
     } else {
         LiveDestinationSearch(state, model, startLiveNavigation)
         Text("Your location", style = MaterialTheme.typography.titleMedium)
         Text(state.gpsStatus)
         state.gps?.let { Text(String.format(Locale.US, "%.5f, %.5f", it.latitude, it.longitude)) }
         Text("Real driving directions open in Google Maps. Phone GPS is optional for searching.")
-        Button(requestGps, modifier = Modifier.fillMaxWidth()) { Text("Enable phone GPS") }
+        BrandButton(requestGps, modifier = Modifier.fillMaxWidth()) { Text("Enable phone GPS") }
         OutlinedButton({ model.simulation(true) }, modifier = Modifier.fillMaxWidth()) { Text("Try demo navigation") }
     }
-    state.message?.let { Text(it, color = Teal) }
+    state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     if (state.simulation || state.liveSearch.query.isBlank() && state.liveSearch.selected == null) Text(if (state.simulation) "Fictional offline map · demo destinations only" else "© OpenStreetMap contributors · GPS map only", style = MaterialTheme.typography.labelSmall)
 }
 
@@ -103,9 +105,9 @@ private fun NavigationCard(state: UiState, model: NavigationViewModel) {
         Text(minutes(state.remainingSeconds))
         Text("ETA " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(System.currentTimeMillis() + state.remainingSeconds * 1000L)))
     }
-    state.message?.let { Text(it, color = Teal) }
+    state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     state.decision?.let { decision ->
-        Surface(color = Color(0xFFDEEFE7), shape = MaterialTheme.shapes.medium) {
+        Surface(color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer, shape = MaterialTheme.shapes.medium) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(if (decision.won) "WTF MODE WINS · SIMULATION" else "NORMAL REROUTE · SIMULATION", fontWeight = FontWeight.Black)
                 state.normalRoute?.let { Text("Normal: ${miles(it.distanceMeters)} · ${minutes(it.durationSeconds)}") }
@@ -118,7 +120,7 @@ private fun NavigationCard(state: UiState, model: NavigationViewModel) {
     if (state.navigating) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(model::pause, modifier = Modifier.weight(1f)) { Text(if (state.paused) "Resume" else "Pause") }
-            Button(model::missTurn, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text(if (state.busy) "Rerouting…" else "Miss a turn") }
+            BrandButton(model::missTurn, enabled = !state.busy, modifier = Modifier.weight(1f)) { Text(if (state.busy) "Rerouting…" else "Miss a turn") }
         }
     }
     OutlinedButton(model::stop, modifier = Modifier.fillMaxWidth()) { Text(if (state.arrived) "Back to home" else "End navigation") }
@@ -128,16 +130,40 @@ private fun NavigationCard(state: UiState, model: NavigationViewModel) {
 private fun Settings(state: UiState, model: NavigationViewModel, requestGps: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your co-pilot", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically) { Text("Demo drive", Modifier.weight(1f)); Switch(state.simulation, model::simulation, modifier = Modifier.semantics { contentDescription = "Demo drive" }) }
+        Row(verticalAlignment = Alignment.CenterVertically) { Text("Demo drive", Modifier.weight(1f)); BrandSwitch(state.simulation, model::simulation, modifier = Modifier.semantics { contentDescription = "Demo drive" }) }
         Text("Demo routes are fictional and offline. Turn Demo drive off for Google destination search and directions in Google Maps.")
-        Row(verticalAlignment = Alignment.CenterVertically) { Text("WTF MODE", Modifier.weight(1f), fontWeight = FontWeight.Bold); Switch(state.wtf, model::wtf, modifier = Modifier.semantics { contentDescription = "WTF MODE" }) }
+        Row(verticalAlignment = Alignment.CenterVertically) { Text("WTF MODE", Modifier.weight(1f), fontWeight = FontWeight.Bold); BrandSwitch(state.wtf, model::wtf, modifier = Modifier.semantics { contentDescription = "WTF MODE" }) }
         Text("Only provider-verified legal alternatives may be used in live navigation. Comedy never changes a maneuver.")
         Text("Personality", style = MaterialTheme.typography.titleMedium)
         Personality.entries.forEach { personality ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clickable { model.personality(personality) }, verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(state.personality == personality, { model.personality(personality) }, modifier = Modifier.semantics { contentDescription = personality.label })
-                Text(personality.label)
+                Text(if (personality == Personality.VOO && !state.billing.unlocked) "🔒 Voo Mode — ${state.billing.price}" else personality.label, color = if (personality == Personality.VOO) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface)
             }
+        }
+        Text("Roast intensity", style = MaterialTheme.typography.titleMedium)
+        RoastIntensity.entries.forEach { intensity ->
+            Row(Modifier.fillMaxWidth().clickable { model.intensity(intensity) }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(state.intensity == intensity, { model.intensity(intensity) })
+                Text(if (intensity == RoastIntensity.FOUL && !state.billing.unlocked) "🔒 Absolutely Foul · Voo unlock" else intensity.label,
+                    color = if (intensity == RoastIntensity.FOUL) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        Text("Voo uses every roast level. Normal, Sassy and Unhinged are included with the base app.")
+        Text("Appearance", style = MaterialTheme.typography.titleMedium)
+        ThemeMode.entries.forEach { mode ->
+            Row(Modifier.fillMaxWidth().clickable { model.theme(mode) }, verticalAlignment = Alignment.CenterVertically) { RadioButton(state.theme == mode, { model.theme(mode) }); Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) }
+        }
+        Text("Purchases", style = MaterialTheme.typography.titleMedium)
+        Text(if (state.billing.purchased) "Voo Mode: purchased" else if (state.billing.development) "Voo Mode: development override (not a purchase)" else "Voo Mode: locked · additional one-time purchase")
+        Text(state.billing.message)
+        OutlinedButton(model.billing::refresh) { Text("Restore Purchases") }
+        if (state.billing.developmentAvailable) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Development Voo override", Modifier.weight(1f))
+                BrandSwitch(state.billing.development, model.billing::development, modifier = Modifier.semantics { contentDescription = "Development Voo override" })
+            }
+            Text("Development APK only. This never charges you or creates a Play purchase. Release builds cannot enable it.", style = MaterialTheme.typography.bodySmall)
         }
         Text("Minimum distance saved: ${state.thresholds.minimumMetersSaved.toInt()} m")
         Slider(state.thresholds.minimumMetersSaved.toFloat(), { model.thresholds(it.toDouble(), state.thresholds.minimumSecondsSaved) }, valueRange = 100f..1600f, steps = 14)
@@ -147,7 +173,7 @@ private fun Settings(state: UiState, model: NavigationViewModel, requestGps: () 
         HorizontalDivider()
         GooglePlacesSettings(state, model)
         Text(state.gpsStatus)
-        Button(requestGps) { Text("Enable phone GPS") }
+        BrandButton(requestGps) { Text("Enable phone GPS") }
         Text("Safety first", style = MaterialTheme.typography.titleMedium)
         Text("Set your destination while parked. Real directions open in Google Maps. In-app demo routes are fictional; never follow them on real roads. This MVP has no in-app live road routing, voice guidance, traffic, or background navigation.")
         Text("Map data © OpenStreetMap contributors", style = MaterialTheme.typography.labelSmall)

@@ -23,7 +23,7 @@ fun GooglePlacesSettings(state: UiState, model: NavigationViewModel) {
         visualTransformation = PasswordVisualTransformation(), singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button({ if (model.saveGoogleKey(key)) { key = ""; keyboard?.hide(); focus.clearFocus() } }, enabled = key.isNotBlank()) { Text("Save key") }
+        BrandButton({ if (model.saveGoogleKey(key)) { key = ""; keyboard?.hide(); focus.clearFocus() } }, enabled = key.isNotBlank()) { Text("Save key") }
         if (state.googleKeyConfigured) OutlinedButton({ model.removeGoogleKey(); key = "" }) { Text("Remove saved key") }
     }
     state.googleKeyMessage?.let { Text(it) }

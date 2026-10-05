@@ -3,3 +3,7 @@
 # Never put a real key in this example, source files, GitHub, or chat.
 GOOGLE_PLACES_API_KEY=PASTE_YOUR_GOOGLE_MAPS_PLATFORM_API_KEY_HERE
 # The installed app also accepts the restricted key in Settings > Google Places, without a rebuild.
+
+# Public Google Play RSA license key, from Play Console > Monetization setup > Licensing.
+# Required for real purchase verification. Never put service-account private keys here.
+GOOGLE_PLAY_LICENSE_KEY=PASTE_YOUR_GOOGLE_PLAY_RSA_PUBLIC_KEY_HERE

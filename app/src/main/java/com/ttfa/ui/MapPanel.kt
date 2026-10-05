@@ -39,7 +39,7 @@ fun MapPanel(state: UiState, modifier: Modifier = Modifier, visible: Boolean = t
         state.route?.let { route ->
             val line = Polyline(view).apply {
                 setPoints(route.points.map { GeoPoint(it.latitude, it.longitude) })
-                outlinePaint.color = android.graphics.Color.rgb(12, 133, 125); outlinePaint.strokeWidth = 12f
+                outlinePaint.color = android.graphics.Color.rgb(0, 224, 223); outlinePaint.strokeWidth = 12f
             }; view.overlays.add(line)
         }
         state.selected?.let { d -> view.overlays.add(Marker(view).apply { position = GeoPoint(d.location.latitude, d.location.longitude); title = d.name; setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM) }) }
@@ -48,7 +48,7 @@ fun MapPanel(state: UiState, modifier: Modifier = Modifier, visible: Boolean = t
             title = if (state.simulation) "Simulated driver" else "Phone GPS"
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
             icon = android.graphics.drawable.ShapeDrawable(android.graphics.drawable.shapes.OvalShape()).apply {
-                paint.color = android.graphics.Color.rgb(255, 94, 64); intrinsicWidth = 32; intrinsicHeight = 32
+                paint.color = android.graphics.Color.rgb(255, 57, 156); intrinsicWidth = 32; intrinsicHeight = 32
             }
         })
         if (state.navigating || !state.simulation && state.gps != null) view.controller.setCenter(GeoPoint(state.location.latitude, state.location.longitude))
